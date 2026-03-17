@@ -6,7 +6,21 @@
 #include <WiFi.h>
 #include <WebServer.h>
 #include <Preferences.h>
+#include "config.h"
 Preferences prefs;
+
+#define SD_SPI_SCK_PIN  39
+#define SD_SPI_MISO_PIN 40
+#define SD_SPI_MOSI_PIN 38
+#define SD_SPI_CS_PIN   47
+
+IPAddress local_IP(192, 168, 178, 200);
+
+IPAddress gateway(192, 168, 178, 1);
+
+IPAddress subnet(255, 255, 255, 0);
+
+WebServer server(80);
 
 bool launch = false;
 bool homeButton = false;
@@ -116,10 +130,53 @@ void setup() {
     M5.Display.setEpdMode(epd_mode_t::epd_fast);
     M5.Display.fillScreen(TFT_WHITE);
     M5.Display.setTextSize(7);
+    wifiSetup();
+    sdSetup();
+    usbSetup();
     
   // put your setup code here, to run once:
 
 }
+
+void wifiSetup(){
+
+   WiFi.config(local_IP, gateway, subnet);
+
+   WiFi.begin(ssid, password);
+    while (WiFi.status() != WL_CONNECTED) {
+        drawNoWifi();
+        delay(500); 
+    }
+    M5.Display.setTextSize(3);
+    M5.Display.setCursor(0, 0);  
+    drawWifi();
+
+}
+
+void usbSetup(){
+  if (Serial) {
+    drawUsb();
+  }
+  else{
+    drawNoUsb();
+  }
+  
+}
+void sdSetup(){
+
+  SPI.begin(SD_SPI_SCK_PIN, SD_SPI_MISO_PIN, SD_SPI_MOSI_PIN, SD_SPI_CS_PIN);
+  M5.Display.setTextSize(3);  
+    if (!SD.begin(SD_SPI_CS_PIN, SPI, 25000000)) {
+    // Print a message if SD card initialization failed or if the SD card does not exist.
+    drawNoSdCard();
+    while (1)
+      ;
+  } else {
+    drawSdCard();
+  }
+
+}
+
 
 
 
@@ -185,4 +242,58 @@ void drawHomeButton(){
   M5.Display.fillRect(249, 912, 42, 10, TFT_DARKGREY);
   M5.Display.fillRect(249, 927, 42, 10, TFT_DARKGREY);
 
+}
+
+void drawWifi(){
+  M5.Display.fillRect(478, 15, 9, 41, TFT_BLACK);
+  M5.Display.fillRect(466, 24, 9, 32, TFT_BLACK);
+  M5.Display.fillRect(454, 33, 9, 23, TFT_BLACK);
+  M5.Display.fillRect(442, 42, 9, 14, TFT_BLACK);
+}
+
+void drawNoWifi(){
+  M5.Display.fillRect(478, 15, 9, 41, TFT_DARKGRAY);
+  M5.Display.fillRect(466, 24, 9, 32, TFT_DARKGRAY);
+  M5.Display.fillRect(454, 33, 9, 23, TFT_DARKGRAY);
+  M5.Display.fillRect(442, 42, 9, 14, TFT_DARKGRAY);
+}
+
+void drawSdCard(){
+  M5.Display.fillRect(497, 15, 30, 27, TFT_BLACK);
+  M5.Display.fillRect(501, 42, 26, 14, TFT_BLACK);
+  M5.Display.fillRect(503, 42, 4, 12, TFT_WHITE);
+  M5.Display.fillRect(509, 42, 4, 12, TFT_WHITE);
+  M5.Display.fillRect(515, 42, 4, 12, TFT_WHITE);
+  M5.Display.fillRect(521, 42, 4, 12, TFT_WHITE);
+ 
+
+}
+
+void drawNoSdCard(){
+
+  M5.Display.fillRect(497, 15, 30, 27, TFT_DARKGRAY);
+  M5.Display.fillRect(501, 42, 26, 14, TFT_DARKGRAY);
+  M5.Display.fillRect(503, 42, 4, 12, TFT_WHITE);
+  M5.Display.fillRect(509, 42, 4, 12, TFT_WHITE);
+  M5.Display.fillRect(515, 42, 4, 12, TFT_WHITE);
+  M5.Display.fillRect(521, 42, 4, 12, TFT_WHITE);
+  M5.Display.fillRect(508, 20, 9, 3, TFT_WHITE);
+  M5.Display.fillRect(514, 23, 3, 5, TFT_WHITE);
+  M5.Display.fillRect(510, 28, 7, 3, TFT_WHITE);
+  M5.Display.fillRect(510, 31, 3, 2, TFT_WHITE);
+  M5.Display.fillRect(510, 35, 3, 3, TFT_WHITE);
+}
+
+void drawUsb(){
+ M5.Display.fillRect(420, 45, 6, 11, TFT_BLACK);
+ M5.Display.fillRect(413, 23, 20, 22, TFT_BLACK);
+ M5.Display.fillRect(417, 18, 12, 5, TFT_DARKGRAY);
+
+}
+
+void drawNoUsb(){
+ M5.Display.fillRect(420, 45, 6, 11, TFT_DARKGRAY);
+ M5.Display.fillRect(413, 23, 20, 22, TFT_DARKGRAY);
+ M5.Display.fillRect(417, 18, 12, 5, TFT_DARKGRAY);
+  
 }
