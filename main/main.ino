@@ -138,6 +138,12 @@ void setup() {
 
 }
 
+void homescreenSetup(){
+M5.Display.fillScreen(TFT_WHITE);
+homeButton=false;
+
+}
+
 void wifiSetup(){
 
    WiFi.config(local_IP, gateway, subnet);
@@ -196,6 +202,10 @@ void loop() {
 
   // put your main code here, to run repeatedly:
   if(apps == 0){ //Homescreen
+  if(launch){
+    homescreenSetup();
+    launch=false;
+  }
   drawHomescreen();
   }
 
@@ -221,8 +231,13 @@ void drawHomescreen(){
 
 void handleTouchHome(int x, int y){
 
-  if(x>=app1x+25-30 && x<= app1x+25+30 && y>=app1y+25-30 && y<=app1y+25+30){
+  if(x>=app1x && x<= app1x+100 && y>=app1y && y<=app1y+100){
     apps = 1;
+    launch = true;
+  }
+
+  if(x>= 220 && x<= 220+100 && y>=877 && y<=877+83 && homeButton){
+    apps = 0;
     launch = true;
   }
 }
