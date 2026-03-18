@@ -5,6 +5,8 @@
 #include <M5GFX.h>
 #include <WiFi.h>
 #include <WebServer.h>
+#include <HTTPClient.h>
+
 
 
 int lastSentValues[4] = {-1, -1, -1, -1};
@@ -30,7 +32,15 @@ void setupVolCtrl() {
     sliders[2].init(300, 200, 60, 650, 0, 1023, 512, TFT_LIGHTGRAY);     // App 3
     sliders[3].init(425, 200, 60, 650, 0, 1023, 512, TFT_LIGHTGRAY);
 
-    for (int i = 0; i < 4; i++) sliders[i].draw();
+    for (int i = 0; i < 4; i++){
+    sliders[i].draw();
+    int displayPercent = map(sliders[i].getValue(), 0, 1023, 0, 100);
+    M5.Display.setTextSize(5); // Size 7 is huge, 3-4 is usually better for labels
+    M5.Display.setTextColor(TFT_BLACK, TFT_WHITE);
+    int textX = 50 + (i * 125); 
+    M5.Display.setCursor(textX, 160);
+    M5.Display.printf("%d%% ", displayPercent);
+    }
 }
 
 void volumeCtrlLoop() {
@@ -63,6 +73,8 @@ void volumeCtrlLoop() {
                 sliders[1].getValue(), 
                 sliders[2].getValue(), 
                 sliders[3].getValue());
+
+
             }
         }
 
