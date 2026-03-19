@@ -103,6 +103,75 @@ public:
     int getValue() { return currentVal; }
 };
 
+class SimpleSlider2 {
+private:
+    SliderRect area;
+    int minVal, maxVal, currentVal;
+    uint16_t color;
+    bool isVertical;
+
+public:
+    // Setup the slider properties
+    void init(int x, int y, int w, int h, int minV, int maxV, int startV, uint16_t sliderColor) {
+        area = {x, y, w, h};
+        minVal = minV;
+        maxVal = maxV;
+        currentVal = startV;
+        color = sliderColor;
+        isVertical = (h > w); // If height is greater than width, it's a vertical slider
+    }
+
+    // Draw the slider on the E-ink screen
+    void draw() {
+        M5.Display.drawRect(area.x, area.y, area.w-20, area.h, TFT_BLACK); // Outer frame
+        updateVisuals(currentVal);
+    }
+
+    // Update logic when the screen is touched
+    bool handleTouch(m5::touch_detail_t &touch) {
+        if (!area.contains(touch.x, touch.y)) return false;
+
+        // Calculate new value based on touch position
+        int newValue;
+        if (isVertical) {
+            newValue = map(touch.y, area.y + area.h, area.y, minVal, maxVal);
+        } else {
+            newValue = map(touch.x, area.x, area.x + area.w, minVal, maxVal);
+        }
+
+        // Constrain the value to be within our min/max
+        newValue = constrain(newValue, min(minVal, maxVal), max(minVal, maxVal));
+
+        if (newValue != currentVal) {
+            updateVisuals(newValue);
+            currentVal = newValue;
+            return true; // Value changed!
+        }
+        return false;
+    }
+
+    void updateVisuals(int val) {
+        // Clear the old slider "thumb" area (simplified)
+        M5.Display.fillRect(area.x + 1, area.y + 1, area.w - 2-20, area.h - 2, TFT_BLACK);
+
+        // Calculate where the "thumb" (the moving indicator) should be
+        int thumbSize = (isVertical) ? area.w - 4 : area.h - 4;
+        int px, py;
+
+        if (isVertical) {
+            px = area.x + 2;
+            py = map(val, minVal, maxVal, area.y + area.h - thumbSize - 2, area.y + 2);
+        } else {
+            px = map(val, minVal, maxVal, area.x + 2, area.x + area.w - thumbSize - 2);
+            py = area.y + 2;
+        }
+
+        M5.Display.fillRoundRect(px, py, thumbSize, thumbSize, 3, color);
+    }
+
+    int getValue() { return currentVal; }
+};
+
 // --- Main Program ---
 
 SimpleSlider sliders[4];
