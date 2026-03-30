@@ -27,10 +27,10 @@ void setupVolCtrl() {
 
     // Initialize 1 horizontal slider (Master) and 3 vertical sliders (Apps)
      // Master
-    sliders[0].init(50, 200, 60, 650, 0, 1023, 512, TFT_LIGHTGRAY);      // App 1
-    sliders[1].init(175, 200, 60, 650, 0, 1023, 512, TFT_LIGHTGRAY);    // App 2
-    sliders[2].init(300, 200, 60, 650, 0, 1023, 512, TFT_LIGHTGRAY);     // App 3
-    sliders[3].init(425, 200, 60, 650, 0, 1023, 512, TFT_LIGHTGRAY);
+    sliders[0].init(50, 200, 60, 600, 0, 1023, 512, TFT_LIGHTGRAY);      // App 1
+    sliders[1].init(175, 200, 60, 600, 0, 1023, 512, TFT_LIGHTGRAY);    // App 2
+    sliders[2].init(300, 200, 60, 600, 0, 1023, 512, TFT_LIGHTGRAY);     // App 3
+    sliders[3].init(425, 200, 60, 600, 0, 1023, 512, TFT_LIGHTGRAY);
 
     for (int i = 0; i < 4; i++){
     sliders[i].draw();
@@ -40,6 +40,7 @@ void setupVolCtrl() {
     int textX = 50 + (i * 125); 
     M5.Display.setCursor(textX, 160);
     M5.Display.printf("%d%% ", displayPercent);
+    drawVolCtrlIcons();
     }
 }
 
@@ -82,4 +83,13 @@ void volumeCtrlLoop() {
     }
   
     delay(10); 
+}
+
+void drawVolCtrlIcons(){
+
+    M5.Display.drawPngFile(SD,"/sound.png",50,820);
+    M5.Display.drawPngFile(SD,"/discord.png",175,820);
+    M5.Display.drawPngFile(SD,"/games.png",300,820);
+    M5.Display.drawPngFile(SD,"/browser.png",420+10,820);
+
 }

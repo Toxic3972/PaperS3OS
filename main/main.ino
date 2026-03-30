@@ -24,6 +24,9 @@ WebServer server(80);
 
 bool launch = false;
 bool homeButton = false;
+bool sdConnected = false;
+bool usbConnected = false;
+bool wifiConnected = false;
 
 struct SliderRect {
     int x, y, w, h;
@@ -109,6 +112,7 @@ private:
     int minVal, maxVal, currentVal;
     uint16_t color;
     bool isVertical;
+    int shrink;
 
 public:
     // Setup the slider properties
@@ -119,11 +123,12 @@ public:
         currentVal = startV;
         color = sliderColor;
         isVertical = (h > w); // If height is greater than width, it's a vertical slider
+        shrink = 22;
     }
 
     // Draw the slider on the E-ink screen
     void draw() {
-        M5.Display.drawRect(area.x, area.y, area.w-20, area.h, TFT_BLACK); // Outer frame
+       // M5.Display.drawRect(area.x, area.y, area.w, area.h, TFT_BLACK); // Outer frame
         updateVisuals(currentVal);
     }
 
@@ -151,8 +156,10 @@ public:
     }
 
     void updateVisuals(int val) {
-        // Clear the old slider "thumb" area (simplified)
-        M5.Display.fillRect(area.x + 1, area.y + 1, area.w - 2-20, area.h - 2, TFT_BLACK);
+        // Clear the old slider "thumb" area (simplified)0
+        M5.Display.fillRect(area.x + shrink, area.y + 1, area.w - shrink * 2, area.h - 2, TFT_BLACK);
+        M5.Display.fillRect(area.x, area.y + 1, shrink, area.h - 2, TFT_WHITE);
+        M5.Display.fillRect(area.x + shrink + area.w - shrink * 2, area.y + 1, shrink, area.h - 2, TFT_WHITE);
 
         // Calculate where the "thumb" (the moving indicator) should be
         int thumbSize = (isVertical) ? area.w - 4 : area.h - 4;
@@ -160,13 +167,13 @@ public:
 
         if (isVertical) {
             px = area.x + 2;
-            py = map(val, minVal, maxVal, area.y + area.h - thumbSize - 2, area.y + 2);
+            py = map(val, minVal, maxVal, area.y + area.h - thumbSize - 2 + 25, area.y + 2);
         } else {
             px = map(val, minVal, maxVal, area.x + 2, area.x + area.w - thumbSize - 2);
             py = area.y + 2;
         }
-
-        M5.Display.fillRoundRect(px, py, thumbSize, thumbSize, 3, color);
+        M5.Display.fillRoundRect(px-1, py-1, thumbSize+2, thumbSize-25+2, 3, TFT_WHITE);
+        M5.Display.fillRoundRect(px, py, thumbSize, thumbSize-25, 3, TFT_BLACK);
     }
 
     int getValue() { return currentVal; }
@@ -174,18 +181,20 @@ public:
 
 // --- Main Program ---
 
-SimpleSlider sliders[4];
+SimpleSlider2 sliders[4];
 int apps = 0;
 int numberOfApps = 2;
 
 int app1x = 50;
-int app1y = 153;; //without Homescreen
+int app1y = 153;
+int app2x = 220;
+int app2y = 153; //without Homescreen
 //main logic
 
 /*apps:
 0. Homescreen
-1. Smoke Guide
-2. VolCTRL
+1. VolCTRL
+2. Smokes
 
 */
 
@@ -202,6 +211,7 @@ void setup() {
     wifiSetup();
     sdSetup();
     usbSetup();
+    serverSetup();
     
   // put your setup code here, to run once:
 
@@ -225,12 +235,14 @@ void wifiSetup(){
     M5.Display.setTextSize(3);
     M5.Display.setCursor(0, 0);  
     drawWifi();
+    wifiConnected = true;
 
 }
 
 void usbSetup(){
   if (Serial) {
     drawUsb();
+    usbConnected = true;
   }
   else{
     drawNoUsb();
@@ -247,10 +259,39 @@ void sdSetup(){
     while (1)
       ;
   } else {
+    sdConnected = true;
     drawSdCard();
   }
 
 }
+
+void serverSetup(){
+
+  server.on("/data", handleUpdate);
+  server.begin();
+
+}
+void drawStatusBar(){
+ if(sdConnected){
+  drawSdCard();
+ } else{
+  drawNoSdCard();
+ }
+  if(wifiConnected){
+    drawWifi();
+ } else{
+  drawNoWifi();
+  
+ }
+  if(usbConnected){
+    drawUsb();
+ } else{
+  drawNoUsb();
+  
+ }
+
+}
+
 
 
 
@@ -269,21 +310,31 @@ void loop() {
         }
       } 
 
-  // put your main code here, to run repeatedly:
   if(apps == 0){ //Homescreen
   if(launch){
     homescreenSetup();
+    drawStatusBar();
     launch=false;
   }
   drawHomescreen();
   }
 
-  if(apps == 1){ //Homescreen
+  if(apps == 1){ //VolCTRL
   if(launch){
     setupVolCtrl();
+    drawStatusBar();
     launch=false;
   }
   volumeCtrlLoop();
+  }
+
+   if(apps == 2){ //Smokes
+  if(launch){
+    setupSmokes();
+    drawStatusBar();
+    launch=false;
+  }
+  smokesLoop();
   }
 
    if(apps != 0){ //Homescreen
@@ -293,15 +344,21 @@ void loop() {
 }
 
 void drawHomescreen(){
-  drawAppIcon("black","VolCTRL",app1x,app1y);
+  drawAppIcon("VolCTRL","VolCTRL",app1x,app1y);
+  drawAppIcon("Smokes","Smokes",app2x,app2y);//TODO
  
 
 }
 
 void handleTouchHome(int x, int y){
 
-  if(x>=app1x && x<= app1x+100 && y>=app1y && y<=app1y+100){
+  if(x>=app1x && x<= app1x+100 && y>=app1y && y<=app1y+100 && apps == 0){ //starts app1
     apps = 1;
+    launch = true;
+  }
+
+   if(x>=app2x && x<= app2x+100 && y>=app2y && y<=app2y+100 && apps == 0){ 
+    apps = 2;
     launch = true;
   }
 
@@ -312,10 +369,11 @@ void handleTouchHome(int x, int y){
 }
 
 void drawAppIcon(String icon, String appName, int x, int y){
-  M5.Display.fillRect(x,y,100,100,TFT_BLACK);
+  //M5.Display.fillRect(x,y,100,100,TFT_BLACK);
+  M5.Display.drawPngFile(SD,"/" + icon + ".png",x,y);
    M5.Display.setTextDatum(middle_center);
    M5.Display.setTextSize(4);
-  M5.Display.drawString(appName, x+50, y+120);
+  M5.Display.drawString(appName, x+50, y+130);
 
 
 }
