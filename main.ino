@@ -1,0 +1,474 @@
+#include <Arduino.h> 
+#include <SPI.h>
+#include <SD.h>
+#include <M5Unified.h>
+#include <M5GFX.h>
+#include <WiFi.h>
+#include <WebServer.h>
+#include <Preferences.h>
+#include "config.h"
+#include <time.h>
+Preferences prefs;
+
+#define SD_SPI_SCK_PIN  39
+#define SD_SPI_MISO_PIN 40
+#define SD_SPI_MOSI_PIN 38
+#define SD_SPI_CS_PIN   47
+
+IPAddress local_IP(192, 168, 178, 200);
+
+IPAddress gateway(192, 168, 178, 1);
+
+IPAddress subnet(255, 255, 255, 0);
+
+WebServer server(80);
+
+const char* ntpServer = "pool.ntp.org";
+const long  gmtOffset_sec = 3600; // Adjust for your timezone (e.g., EST is -5 * 3600)
+const int   daylightOffset_sec = 3600; // 3600 if DST is active, else 0
+
+bool launch = false;
+bool homeButton = false;
+bool sdConnected = false;
+bool usbConnected = false;
+bool wifiConnected = false;
+
+struct SliderRect {
+    int x, y, w, h;
+    
+    // Checks if a touch point is inside this slider's box
+    bool contains(int touchX, int touchY) {
+        return (touchX >= x && touchX < (x + w) && touchY >= y && touchY < (y + h));
+    }
+};
+
+class SimpleSlider {
+private:
+    SliderRect area;
+    int minVal, maxVal, currentVal;
+    uint16_t color;
+    bool isVertical;
+
+public:
+    // Setup the slider properties
+    void init(int x, int y, int w, int h, int minV, int maxV, int startV, uint16_t sliderColor) {
+        area = {x, y, w, h};
+        minVal = minV;
+        maxVal = maxV;
+        currentVal = startV;
+        color = sliderColor;
+        isVertical = (h > w); // If height is greater than width, it's a vertical slider
+    }
+
+    // Draw the slider on the E-ink screen
+    void draw() {
+        M5.Display.drawRect(area.x, area.y, area.w, area.h, TFT_BLACK); // Outer frame
+        updateVisuals(currentVal);
+    }
+
+    // Update logic when the screen is touched
+    bool handleTouch(m5::touch_detail_t &touch) {
+        if (!area.contains(touch.x, touch.y)) return false;
+
+        // Calculate new value based on touch position
+        int newValue;
+        if (isVertical) {
+            newValue = map(touch.y, area.y + area.h, area.y, minVal, maxVal);
+        } else {
+            newValue = map(touch.x, area.x, area.x + area.w, minVal, maxVal);
+        }
+
+        // Constrain the value to be within our min/max
+        newValue = constrain(newValue, min(minVal, maxVal), max(minVal, maxVal));
+
+        if (newValue != currentVal) {
+            updateVisuals(newValue);
+            currentVal = newValue;
+            return true; // Value changed!
+        }
+        return false;
+    }
+
+    void updateVisuals(int val) {
+        // Clear the old slider "thumb" area (simplified)
+        M5.Display.fillRect(area.x + 1, area.y + 1, area.w - 2, area.h - 2, TFT_BLACK);
+
+        // Calculate where the "thumb" (the moving indicator) should be
+        int thumbSize = (isVertical) ? area.w - 4 : area.h - 4;
+        int px, py;
+
+        if (isVertical) {
+            px = area.x + 2;
+            py = map(val, minVal, maxVal, area.y + area.h - thumbSize - 2, area.y + 2);
+        } else {
+            px = map(val, minVal, maxVal, area.x + 2, area.x + area.w - thumbSize - 2);
+            py = area.y + 2;
+        }
+
+        M5.Display.fillRoundRect(px, py, thumbSize, thumbSize, 3, color);
+    }
+
+    int getValue() { return currentVal; }
+};
+
+class SimpleSlider2 {
+private:
+    SliderRect area;
+    int minVal, maxVal, currentVal;
+    uint16_t color;
+    bool isVertical;
+    int shrink;
+
+public:
+    // Setup the slider properties
+    void init(int x, int y, int w, int h, int minV, int maxV, int startV, uint16_t sliderColor) {
+        area = {x, y, w, h};
+        minVal = minV;
+        maxVal = maxV;
+        currentVal = startV;
+        color = sliderColor;
+        isVertical = (h > w); // If height is greater than width, it's a vertical slider
+        shrink = 22;
+    }
+
+    // Draw the slider on the E-ink screen
+    void draw() {
+       // M5.Display.drawRect(area.x, area.y, area.w, area.h, TFT_BLACK); // Outer frame
+        updateVisuals(currentVal);
+    }
+
+    // Update logic when the screen is touched
+    bool handleTouch(m5::touch_detail_t &touch) {
+        if (!area.contains(touch.x, touch.y)) return false;
+
+        // Calculate new value based on touch position
+        int newValue;
+        if (isVertical) {
+            newValue = map(touch.y, area.y + area.h, area.y, minVal, maxVal);
+        } else {
+            newValue = map(touch.x, area.x, area.x + area.w, minVal, maxVal);
+        }
+
+        // Constrain the value to be within our min/max
+        newValue = constrain(newValue, min(minVal, maxVal), max(minVal, maxVal));
+
+        if (newValue != currentVal) {
+            updateVisuals(newValue);
+            currentVal = newValue;
+            return true; // Value changed!
+        }
+        return false;
+    }
+
+    void updateVisuals(int val) {
+        // Clear the old slider "thumb" area (simplified)0
+        M5.Display.fillRect(area.x + shrink, area.y + 1, area.w - shrink * 2, area.h - 2, TFT_BLACK);
+        M5.Display.fillRect(area.x, area.y + 1, shrink, area.h - 2, TFT_WHITE);
+        M5.Display.fillRect(area.x + shrink + area.w - shrink * 2, area.y + 1, shrink, area.h - 2, TFT_WHITE);
+
+        // Calculate where the "thumb" (the moving indicator) should be
+        int thumbSize = (isVertical) ? area.w - 4 : area.h - 4;
+        int px, py;
+
+        if (isVertical) {
+            px = area.x + 2;
+            py = map(val, minVal, maxVal, area.y + area.h - thumbSize - 2 + 25, area.y + 2);
+        } else {
+            px = map(val, minVal, maxVal, area.x + 2, area.x + area.w - thumbSize - 2);
+            py = area.y + 2;
+        }
+        M5.Display.fillRoundRect(px-1, py-1, thumbSize+2, thumbSize-25+2, 3, TFT_WHITE);
+        M5.Display.fillRoundRect(px, py, thumbSize, thumbSize-25, 3, TFT_BLACK);
+    }
+
+    int getValue() { return currentVal; }
+};
+
+// --- Main Program ---
+
+SimpleSlider2 sliders[4];
+int apps = 0;
+int numberOfApps = 2;
+
+int app1x = 50;
+int app1y = 153;
+int app2x = 220;
+int app2y = 153; //without Homescreen
+//main logic
+
+/*apps:
+0. Homescreen
+1. VolCTRL
+2. Smokes
+
+*/
+
+
+void setup() {
+  auto cfg = M5.config();
+    M5.begin(cfg);
+    Serial.begin(115200);
+    M5.Display.setRotation(2);
+    // Set E-ink to fastest mode for better slider response
+    M5.Display.setEpdMode(epd_mode_t::epd_fast);
+    M5.Display.fillScreen(TFT_WHITE);
+    M5.Display.setTextSize(7);
+    wifiSetup();
+    sdSetup();
+    usbSetup();
+    serverSetup();
+    configTime(gmtOffset_sec, daylightOffset_sec, "216.239.35.0");
+    
+  // put your setup code here, to run once:
+
+}
+
+void homescreenSetup(){
+M5.Display.fillScreen(TFT_WHITE);
+homeButton=false;
+
+}
+
+void wifiSetup(){
+
+   WiFi.config(local_IP, gateway, subnet);
+
+   WiFi.begin(ssid, password);
+    while (WiFi.status() != WL_CONNECTED) {
+        drawNoWifi();
+        delay(500); 
+    }
+    M5.Display.setTextSize(3);
+    M5.Display.setCursor(0, 0);  
+    drawWifi();
+    wifiConnected = true;
+
+}
+
+void usbSetup(){
+  if (Serial) {
+    drawUsb();
+    usbConnected = true;
+  }
+  else{
+    drawNoUsb();
+  }
+  
+}
+void sdSetup(){
+
+  SPI.begin(SD_SPI_SCK_PIN, SD_SPI_MISO_PIN, SD_SPI_MOSI_PIN, SD_SPI_CS_PIN);
+  M5.Display.setTextSize(3);  
+    if (!SD.begin(SD_SPI_CS_PIN, SPI, 25000000)) {
+    // Print a message if SD card initialization failed or if the SD card does not exist.
+    drawNoSdCard();
+    while (1)
+      ;
+  } else {
+    sdConnected = true;
+    drawSdCard();
+  }
+
+}
+
+void serverSetup(){
+
+  server.on("/data", handleUpdate);
+  server.begin();
+
+}
+void drawStatusBar(){
+ if(sdConnected){
+  drawSdCard();
+ } else{
+  drawNoSdCard();
+ }
+  if(wifiConnected){
+    drawWifi();
+ } else{
+  drawNoWifi();
+  
+ }
+  if(usbConnected){
+    drawUsb();
+ } else{
+  drawNoUsb();
+  
+ }
+
+}
+
+
+
+
+
+void loop() {
+  M5.update();
+
+  if (M5.Touch.getCount() > 0) {
+        auto detail = M5.Touch.getDetail(0);
+
+        if (detail.wasPressed()) {
+          int tx = detail.x; 
+          int ty = detail.y;     
+          handleTouchHome(tx,ty);
+
+        }
+      } 
+
+  if(apps == 0){ //Homescreen
+  if(launch){
+    homescreenSetup();
+    drawStatusBar();
+    launch=false;
+  }
+  drawHomescreen();
+  }
+
+  if(apps == 1){ //VolCTRL
+  if(launch){
+    setupVolCtrl();
+    drawStatusBar();
+    launch=false;
+  }
+  volumeCtrlLoop();
+  }
+
+   if(apps == 2){ //Smokes
+  if(launch){
+    setupSmokes();
+    drawStatusBar();
+    launch=false;
+  }
+  smokesLoop();
+  }
+
+   if(apps != 0){ //Homescreen
+    drawHomeButton();
+  }
+
+}
+
+void drawHomescreen(){
+  drawAppIcon("VolCTRL","VolCTRL",app1x,app1y);
+  drawAppIcon("Smokes","Smokes",app2x,app2y);//TODO
+  drawClock(9,false,50,80);
+  gifLoop(); 
+
+}
+
+void handleTouchHome(int x, int y){
+
+  if(x>=app1x && x<= app1x+100 && y>=app1y && y<=app1y+100 && apps == 0){ //starts app1
+    apps = 1;
+    launch = true;
+  }
+
+   if(x>=app2x && x<= app2x+100 && y>=app2y && y<=app2y+100 && apps == 0){ 
+    apps = 2;
+    launch = true;
+  }
+
+  if(x>= 220 && x<= 220+100 && y>=877 && y<=877+83 && homeButton){
+    apps = 0;
+    launch = true;
+  }
+}
+
+void drawAppIcon(String icon, String appName, int x, int y){
+  //M5.Display.fillRect(x,y,100,100,TFT_BLACK);
+  M5.Display.drawPngFile(SD,"/" + icon + ".png",x,y);
+   M5.Display.setTextDatum(middle_center);
+   M5.Display.setTextSize(4);
+  M5.Display.drawString(appName, x+50, y+130);
+
+
+}
+
+void drawHomeButton(){
+  homeButton = true;
+  M5.Display.fillRect(249, 897, 42, 10, TFT_DARKGREY);
+  M5.Display.fillRect(249, 912, 42, 10, TFT_DARKGREY);
+  M5.Display.fillRect(249, 927, 42, 10, TFT_DARKGREY);
+
+}
+
+void drawWifi(){
+  M5.Display.fillRect(478, 15, 9, 41, TFT_BLACK);
+  M5.Display.fillRect(466, 24, 9, 32, TFT_BLACK);
+  M5.Display.fillRect(454, 33, 9, 23, TFT_BLACK);
+  M5.Display.fillRect(442, 42, 9, 14, TFT_BLACK);
+}
+
+void drawNoWifi(){
+  M5.Display.fillRect(478, 15, 9, 41, TFT_DARKGRAY);
+  M5.Display.fillRect(466, 24, 9, 32, TFT_DARKGRAY);
+  M5.Display.fillRect(454, 33, 9, 23, TFT_DARKGRAY);
+  M5.Display.fillRect(442, 42, 9, 14, TFT_DARKGRAY);
+}
+
+void drawSdCard(){
+  M5.Display.fillRect(497, 15, 30, 27, TFT_BLACK);
+  M5.Display.fillRect(501, 42, 26, 14, TFT_BLACK);
+  M5.Display.fillRect(503, 42, 4, 12, TFT_WHITE);
+  M5.Display.fillRect(509, 42, 4, 12, TFT_WHITE);
+  M5.Display.fillRect(515, 42, 4, 12, TFT_WHITE);
+  M5.Display.fillRect(521, 42, 4, 12, TFT_WHITE);
+ 
+
+}
+
+void drawNoSdCard(){
+
+  M5.Display.fillRect(497, 15, 30, 27, TFT_DARKGRAY);
+  M5.Display.fillRect(501, 42, 26, 14, TFT_DARKGRAY);
+  M5.Display.fillRect(503, 42, 4, 12, TFT_WHITE);
+  M5.Display.fillRect(509, 42, 4, 12, TFT_WHITE);
+  M5.Display.fillRect(515, 42, 4, 12, TFT_WHITE);
+  M5.Display.fillRect(521, 42, 4, 12, TFT_WHITE);
+  M5.Display.fillRect(508, 20, 9, 3, TFT_WHITE);
+  M5.Display.fillRect(514, 23, 3, 5, TFT_WHITE);
+  M5.Display.fillRect(510, 28, 7, 3, TFT_WHITE);
+  M5.Display.fillRect(510, 31, 3, 2, TFT_WHITE);
+  M5.Display.fillRect(510, 35, 3, 3, TFT_WHITE);
+}
+
+void drawUsb(){
+ M5.Display.fillRect(420, 45, 6, 11, TFT_BLACK);
+ M5.Display.fillRect(413, 23, 20, 22, TFT_BLACK);
+ M5.Display.fillRect(417, 18, 12, 5, TFT_DARKGRAY);
+
+}
+
+void drawNoUsb(){
+ M5.Display.fillRect(420, 45, 6, 11, TFT_DARKGRAY);
+ M5.Display.fillRect(413, 23, 20, 22, TFT_DARKGRAY);
+ M5.Display.fillRect(417, 18, 12, 5, TFT_DARKGRAY);
+  
+}
+
+void drawClock(int size, bool seconds, int x, int y) {
+  struct tm timeinfo;
+  if(!getLocalTime(&timeinfo)){
+    return;
+  }
+  
+  // Format the time into a string
+  M5.Display.setCursor(x, y);
+   M5.Display.setTextSize(size);
+
+   if(seconds){
+      M5.Display.printf("%02d:%02d:%02d", 
+                    timeinfo.tm_hour, 
+                    timeinfo.tm_min, 
+                    timeinfo.tm_sec);
+   }
+    if(!seconds){
+      M5.Display.printf("%02d:%02d", 
+                    timeinfo.tm_hour, 
+                    timeinfo.tm_min);
+   }
+
+
+  
+}
