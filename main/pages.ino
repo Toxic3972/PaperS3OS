@@ -979,7 +979,7 @@ void goBack(){
 
 void drawHome(){
   M5.Display.setTextSize(7);
-  M5.Display.fillRect(0,70,540,960,TFT_WHITE); 
+  M5.Display.fillRect(0,0,540,960,TFT_WHITE); 
   M5.Display.setTextDatum(middle_center);   
   M5.Display.drawString("Toxic's", 270, 210);
   M5.Display.drawString("Amazing", 270, 270);

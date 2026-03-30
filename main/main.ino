@@ -352,7 +352,8 @@ void loop() {
 void drawHomescreen(){
   drawAppIcon("VolCTRL","VolCTRL",app1x,app1y);
   drawAppIcon("Smokes","Smokes",app2x,app2y);//TODO
-  drawClock(9,false,50,80); 
+  drawClock(9,false,50,80);
+  gifLoop(); 
 
 }
 
