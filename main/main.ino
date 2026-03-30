@@ -7,6 +7,7 @@
 #include <WebServer.h>
 #include <Preferences.h>
 #include "config.h"
+#include <time.h>
 Preferences prefs;
 
 #define SD_SPI_SCK_PIN  39
@@ -21,6 +22,10 @@ IPAddress gateway(192, 168, 178, 1);
 IPAddress subnet(255, 255, 255, 0);
 
 WebServer server(80);
+
+const char* ntpServer = "pool.ntp.org";
+const long  gmtOffset_sec = 3600; // Adjust for your timezone (e.g., EST is -5 * 3600)
+const int   daylightOffset_sec = 3600; // 3600 if DST is active, else 0
 
 bool launch = false;
 bool homeButton = false;
@@ -212,6 +217,7 @@ void setup() {
     sdSetup();
     usbSetup();
     serverSetup();
+    configTime(gmtOffset_sec, daylightOffset_sec, "216.239.35.0");
     
   // put your setup code here, to run once:
 
@@ -346,7 +352,7 @@ void loop() {
 void drawHomescreen(){
   drawAppIcon("VolCTRL","VolCTRL",app1x,app1y);
   drawAppIcon("Smokes","Smokes",app2x,app2y);//TODO
- 
+  drawClock(9,false,50,80); 
 
 }
 
@@ -437,5 +443,31 @@ void drawNoUsb(){
  M5.Display.fillRect(420, 45, 6, 11, TFT_DARKGRAY);
  M5.Display.fillRect(413, 23, 20, 22, TFT_DARKGRAY);
  M5.Display.fillRect(417, 18, 12, 5, TFT_DARKGRAY);
+  
+}
+
+void drawClock(int size, bool seconds, int x, int y) {
+  struct tm timeinfo;
+  if(!getLocalTime(&timeinfo)){
+    return;
+  }
+  
+  // Format the time into a string
+  M5.Display.setCursor(x, y);
+   M5.Display.setTextSize(size);
+
+   if(seconds){
+      M5.Display.printf("%02d:%02d:%02d", 
+                    timeinfo.tm_hour, 
+                    timeinfo.tm_min, 
+                    timeinfo.tm_sec);
+   }
+    if(!seconds){
+      M5.Display.printf("%02d:%02d", 
+                    timeinfo.tm_hour, 
+                    timeinfo.tm_min);
+   }
+
+
   
 }
